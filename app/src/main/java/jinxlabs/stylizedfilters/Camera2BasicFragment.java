@@ -24,6 +24,7 @@ import android.app.DialogFragment;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.ImageFormat;
@@ -44,6 +45,7 @@ import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
@@ -70,6 +72,12 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+
+import io.reactivex.Observable;
+import io.reactivex.Observer;
+import io.reactivex.android.schedulers.AndroidSchedulers;
+import io.reactivex.disposables.Disposable;
+import io.reactivex.schedulers.Schedulers;
 
 public class Camera2BasicFragment extends Fragment
         implements View.OnClickListener, FragmentCompat.OnRequestPermissionsResultCallback {
@@ -229,10 +237,6 @@ public class Camera2BasicFragment extends Fragment
      */
     private ImageReader mImageReader;
 
-    /**
-     * This is the output file for our picture.
-     */
-    private File mFile;
 
     /**
      * This a callback object for the {@link ImageReader}. "onImageAvailable" will be called when a
@@ -242,8 +246,56 @@ public class Camera2BasicFragment extends Fragment
             = new ImageReader.OnImageAvailableListener() {
 
         @Override
-        public void onImageAvailable(ImageReader reader) {
-            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), mFile));
+        public void onImageAvailable(final ImageReader reader) {
+            Observable.just(reader.acquireLatestImage())
+                    .subscribeOn(Schedulers.newThread())
+                    .observeOn(AndroidSchedulers.mainThread())
+                    .subscribe(new Observer<Image>() {
+                        private File imageFile = createNewImageFile();
+
+                        @Override
+                        public void onSubscribe(@io.reactivex.annotations.NonNull Disposable d) {
+
+                        }
+
+                        @Override
+                        public void onNext(@io.reactivex.annotations.NonNull Image image) {
+                            ByteBuffer buffer = image.getPlanes()[0].getBuffer();
+                            byte[] bytes = new byte[buffer.remaining()];
+                            buffer.get(bytes);
+                            FileOutputStream output = null;
+                            try {
+                                output = new FileOutputStream(imageFile);
+                                output.write(bytes);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            } finally {
+                                image.close();
+                                if (null != output) {
+                                    try {
+                                        output.close();
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+
+                                }
+                            }
+
+                        }
+
+                        @Override
+                        public void onError(@io.reactivex.annotations.NonNull Throwable e) {
+
+                        }
+
+                        @Override
+                        public void onComplete() {
+                            Intent intent = new Intent(getActivity(), StylizeActivity.class);
+                            intent.putExtra("IMAGE_FILE_URL", imageFile.getAbsolutePath());
+                            startActivity(intent);
+                        }
+                    });
+            //mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage(), createNewImageFile()));
         }
 
     };
@@ -433,7 +485,6 @@ public class Camera2BasicFragment extends Fragment
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
-        mFile = new File(getActivity().getExternalFilesDir(null), "pic.jpg");
     }
 
     @Override
@@ -834,8 +885,7 @@ public class Camera2BasicFragment extends Fragment
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session,
                                                @NonNull CaptureRequest request,
                                                @NonNull TotalCaptureResult result) {
-                    showToast("Saved: " + mFile);
-                    Log.d(TAG, mFile.toString());
+                    showToast("Saved");
                     unlockFocus();
                 }
             };
@@ -937,10 +987,33 @@ public class Camera2BasicFragment extends Fragment
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
+
+                    startStylizeActivity();
                 }
             }
         }
 
+        private void startStylizeActivity() {
+
+        }
+
+    }
+
+    public Context getActivityContext() {
+        return getActivity();
+    }
+
+    private File createNewImageFile() {
+        final File f = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "Stylize");
+
+        if (!f.exists()) {
+            boolean rv = f.mkdir();
+            Log.d(TAG, "Folder creation " + (rv ? "success" : "failed"));
+        }
+
+        File file = new File(f.getAbsolutePath() + "/pic" + System.currentTimeMillis() + ".jpg");
+
+        return file;
     }
 
     /**

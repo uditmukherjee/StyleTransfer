@@ -35,7 +35,13 @@ dependencies {
         exclude group: 'com.android.support', module: 'support-annotations'
     })
     compile 'com.android.support:appcompat-v7:25.3.1'
-    compile "com.android.support:support-v13:25.3.1"
+    compile 'com.android.support:support-v13:25.3.1'
     compile 'com.android.support.constraint:constraint-layout:1.0.2'
+
+    compile 'io.reactivex.rxjava2:rxandroid:2.0.1'
+    compile 'io.reactivex.rxjava2:rxjava:2.1.0'
+
+    compile 'org.tensorflow:tensorflow-android:1.2.0-preview'
+
     testCompile 'junit:junit:4.12'
 }
