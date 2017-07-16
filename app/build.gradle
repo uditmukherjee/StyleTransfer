@@ -41,5 +41,7 @@ dependencies {
     compile 'io.reactivex.rxjava2:rxandroid:2.0.1'
     compile 'io.reactivex.rxjava2:rxjava:2.1.0'
 
+    compile 'org.tensorflow:tensorflow-android:1.2.0-preview'
+
     testCompile 'junit:junit:4.12'
 }
