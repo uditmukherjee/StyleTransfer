@@ -43,5 +43,8 @@ dependencies {
 
     compile 'org.tensorflow:tensorflow-android:1.2.0-preview'
 
+    compile 'com.jakewharton:butterknife:8.7.0'
+    annotationProcessor 'com.jakewharton:butterknife-compiler:8.7.0'
+
     testCompile 'junit:junit:4.12'
 }

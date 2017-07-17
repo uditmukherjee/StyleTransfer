@@ -17,6 +17,6 @@
         android:layout_height="wrap_content"
         android:text="Apply Style"
         android:id="@+id/stylize_button"
-        android:layout_below="@id/filter_preview"/>
+        android:layout_alignParentBottom="true"/>
 
 </RelativeLayout>
