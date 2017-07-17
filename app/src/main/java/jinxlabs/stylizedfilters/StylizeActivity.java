@@ -19,6 +19,7 @@ import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.Disposable;
 import io.reactivex.schedulers.Schedulers;
+import jinxlabs.stylizedfilters.utils.Logger;
 
 public class StylizeActivity extends AppCompatActivity {
 
@@ -40,14 +41,42 @@ public class StylizeActivity extends AppCompatActivity {
 
     private final float[] styleVals = new float[NUM_STYLES];
 
+    private Logger logger = new Logger(StylizeActivity.class);
+
+    private Observer<Bitmap> applyStyleObserver = new Observer<Bitmap>() {
+        @Override
+        public void onSubscribe(@NonNull Disposable d) {
+
+        }
+
+        @Override
+        public void onNext(@NonNull Bitmap bitmap) {
+            logger.startTimeLogging("Applying Style");
+            applyStyle(bitmap);
+            logger.logTimeTaken();
+        }
+
+        @Override
+        public void onError(@NonNull Throwable e) {
+            e.printStackTrace();
+        }
+
+        @Override
+        public void onComplete() {
+
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_stylize);
 
-        String filePath = getIntent().getExtras().getString("IMAGE_FILE_URL");
+        //String filePath = getIntent().getExtras().getString("IMAGE_FILE_URL");
+        String filePath = "/sdcard/Download/test.jpg";
 
         imageFile = new File(filePath);
+        logger.d("Image file path %s", imageFile.getAbsolutePath());
 
         imagePreview = (ImageView) findViewById(R.id.filter_preview);
         stylizeButton = (Button) findViewById(R.id.stylize_button);
@@ -63,34 +92,14 @@ public class StylizeActivity extends AppCompatActivity {
                 Observable.just(imageBitmap)
                         .subscribeOn(Schedulers.computation())
                         .observeOn(AndroidSchedulers.mainThread())
-                        .subscribe(new Observer<Bitmap>() {
-                            @Override
-                            public void onSubscribe(@NonNull Disposable d) {
-
-                            }
-
-                            @Override
-                            public void onNext(@NonNull Bitmap bitmap) {
-                                applyStyle(bitmap);
-                            }
-
-                            @Override
-                            public void onError(@NonNull Throwable e) {
-
-                            }
-
-                            @Override
-                            public void onComplete() {
-
-                            }
-                        });
+                        .subscribe(applyStyleObserver);
             }
         });
     }
 
     private void applyStyle(Bitmap imageBitmap) {
         int targetWidth = 720;
-        int targetHeight =720;
+        int targetHeight = 720;
 
         Bitmap resizedBitmap = ThumbnailUtils.extractThumbnail(imageBitmap, targetWidth, targetHeight);
 
