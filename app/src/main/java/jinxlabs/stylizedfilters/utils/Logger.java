@@ -20,7 +20,7 @@ public class Logger {
         TAG = tag;
     }
 
-    private long startTime;
+    private long startTime = 0;
     private String profilingTitle;
 
     public void startTimeLogging(@NonNull String profilingTitle) {
@@ -29,6 +29,8 @@ public class Logger {
     }
 
     public void logTimeTaken() {
+        if (startTime == 0) return;
+
         long timeTaken = System.currentTimeMillis() - startTime;
         if (isLoggable) Log.d(TAG, profilingTitle + " took " + timeTaken + " ms");
         startTime = 0;
