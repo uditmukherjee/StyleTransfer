@@ -5,10 +5,15 @@ import android.graphics.BitmapFactory;
 import android.media.ThumbnailUtils;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 
+import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.core.Rect;
 import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 
 import java.io.File;
@@ -77,6 +82,12 @@ public class StylizeActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_stylize);
 
+        if (!OpenCVLoader.initDebug()) {
+            logger.e("OpenCVLoader.initDebug(), not working.");
+        } else {
+            logger.i("OpenCVLoader.initDebug(), working.");
+        }
+
         //String filePath = getIntent().getExtras().getString("IMAGE_FILE_URL");
         String filePath = "/sdcard/Download/test3.jpg";
 
@@ -88,6 +99,9 @@ public class StylizeActivity extends AppCompatActivity {
         imageBitmap = BitmapFactory.decodeFile(filePath);
         logger.d("Original image width : %d height : %d", imageBitmap.getWidth(), imageBitmap.getHeight());
 
+        //cropBitmap();
+        imageBitmap = ThumbnailUtils.extractThumbnail(imageBitmap, targetWidth, targetHeight);
+
         logger.startTimeLogging("Read pixel values to array");
         readPixelValues(imageBitmap);
         logger.logTimeTaken();
@@ -98,8 +112,7 @@ public class StylizeActivity extends AppCompatActivity {
     }
 
     private void readPixelValues(Bitmap imageBitmap) {
-        Bitmap resizedBitmap = ThumbnailUtils.extractThumbnail(imageBitmap, targetWidth, targetHeight);
-        resizedBitmap.getPixels(rgbPackedValues, 0, targetWidth, 0, 0, targetWidth, targetHeight);
+        imageBitmap.getPixels(rgbPackedValues, 0, targetWidth, 0, 0, targetWidth, targetHeight);
 
         for (int i = 0; i < rgbPackedValues.length; i++) {
             final int value = rgbPackedValues[i];
@@ -116,6 +129,42 @@ public class StylizeActivity extends AppCompatActivity {
                 .subscribeOn(Schedulers.computation())
                 .observeOn(AndroidSchedulers.mainThread())
                 .subscribe(applyStyleObserver);
+    }
+
+    private void cropBitmap() {
+        logger.startTimeLogging("Cropping image to 720 x 720");
+        int originalWidth = imageBitmap.getWidth();
+        int originalHeight = imageBitmap.getHeight();
+
+        float aspectRatio = (float) originalWidth / originalHeight;
+        int heightWithAspectRatio = (int) (targetWidth / aspectRatio);
+
+        logger.d("Target Width : %d Target Height : %d Aspect ratio %f", targetWidth, heightWithAspectRatio, aspectRatio);
+
+        // Scale bitmap maintaining the aspect ratio
+        Bitmap rescaledBitmap = Bitmap.createScaledBitmap(imageBitmap, targetWidth, heightWithAspectRatio, false);
+
+        Mat mat = new Mat();
+        Utils.bitmapToMat(rescaledBitmap, mat);
+
+        logger.d("Mat rows : %d cols : %d", mat.rows(), mat.cols());
+
+        int y = 0;
+        if (heightWithAspectRatio > targetHeight) {
+            int diff = heightWithAspectRatio - targetHeight;
+            y = diff/2;
+        }
+
+        logger.d("Diff b/w targetHeight and aspect ratio height : %d", y);
+
+        Bitmap targetBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
+        Mat targetMat = mat.submat(y, y + targetHeight, 0, targetWidth);
+
+        Utils.matToBitmap(targetMat, targetBitmap);
+
+        logger.logTimeTaken();
+
+        imageBitmap = targetBitmap;
     }
 
     private void applyStyle(Bitmap imageBitmap) {
