@@ -12,11 +12,18 @@ import android.widget.ImageView;
 
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Range;
 import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
 import org.tensorflow.contrib.android.TensorFlowInferenceInterface;
 
 import java.io.File;
+import java.util.ArrayList;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
@@ -26,7 +33,9 @@ import io.reactivex.Observer;
 import io.reactivex.android.schedulers.AndroidSchedulers;
 import io.reactivex.annotations.NonNull;
 import io.reactivex.disposables.Disposable;
+import io.reactivex.functions.Function;
 import io.reactivex.schedulers.Schedulers;
+import jinxlabs.stylizedfilters.utils.ImageUtils;
 import jinxlabs.stylizedfilters.utils.Logger;
 
 public class StylizeActivity extends AppCompatActivity {
@@ -36,9 +45,6 @@ public class StylizeActivity extends AppCompatActivity {
 
     private static final int targetWidth = 720;
     private static final int targetHeight = 720;
-
-    private int[] rgbPackedValues = new int[targetWidth * targetHeight];
-    private float[] rgbValues = new float[targetWidth * targetHeight * 3];
 
     private Bitmap imageBitmap;
     private Logger logger = new Logger(StylizeActivity.class);
@@ -53,40 +59,20 @@ public class StylizeActivity extends AppCompatActivity {
 
     private final float[] styleVals = new float[NUM_STYLES];
 
-    private Observer<Bitmap> applyStyleObserver = new Observer<Bitmap>() {
-        @Override
-        public void onSubscribe(@NonNull Disposable d) {
+    private ArrayList<Bitmap> squareParts;
 
-        }
+    private ImageUtils imageUtils;
 
-        @Override
-        public void onNext(@NonNull Bitmap bitmap) {
-            logger.startTimeLogging("Applying Style");
-            applyStyle(bitmap);
-            logger.logTimeTaken();
-        }
+    private ArrayList<ImageInfo> imageInfoArrayList = new ArrayList<>();
 
-        @Override
-        public void onError(@NonNull Throwable e) {
-            e.printStackTrace();
-        }
-
-        @Override
-        public void onComplete() {
-
-        }
-    };
+    static {
+        System.loadLibrary("image_stitching");
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_stylize);
-
-        if (!OpenCVLoader.initDebug()) {
-            logger.e("OpenCVLoader.initDebug(), not working.");
-        } else {
-            logger.i("OpenCVLoader.initDebug(), working.");
-        }
 
         //String filePath = getIntent().getExtras().getString("IMAGE_FILE_URL");
         String filePath = "/sdcard/Download/test3.jpg";
@@ -95,79 +81,94 @@ public class StylizeActivity extends AppCompatActivity {
 
         ButterKnife.bind(this);
 
+        imageUtils = new ImageUtils();
+
         // Show original image
-        imageBitmap = BitmapFactory.decodeFile(filePath);
+        imageBitmap = imageUtils.fetchBitmapFromFile(filePath);
         logger.d("Original image width : %d height : %d", imageBitmap.getWidth(), imageBitmap.getHeight());
 
-        //cropBitmap();
-        imageBitmap = ThumbnailUtils.extractThumbnail(imageBitmap, targetWidth, targetHeight);
-
-        logger.startTimeLogging("Read pixel values to array");
-        readPixelValues(imageBitmap);
-        logger.logTimeTaken();
-
+        squareParts = imageUtils.splitImageIntoSquares(imageBitmap, targetWidth, targetHeight);
+        fetchPixelValues(squareParts);
         imagePreview.setImageBitmap(imageBitmap);
 
         initTensorFlow();
     }
 
-    private void readPixelValues(Bitmap imageBitmap) {
-        imageBitmap.getPixels(rgbPackedValues, 0, targetWidth, 0, 0, targetWidth, targetHeight);
+    private void fetchPixelValues(ArrayList<Bitmap> squareParts) {
+        for (Bitmap bitmap : squareParts) {
+            ImageInfo imageInfo = new ImageInfo(targetWidth, targetHeight);
+            imageInfo.readPixelValues(bitmap);
 
-        for (int i = 0; i < rgbPackedValues.length; i++) {
-            final int value = rgbPackedValues[i];
-
-            rgbValues[i * 3] = ((value >> 16) & 0xFF) / 255.0f;
-            rgbValues[i * 3 + 1] = ((value >> 8) & 0xFF) / 255.0f;
-            rgbValues[i * 3 + 2] = (value & 0xFF) / 255.0f;
+            imageInfoArrayList.add(imageInfo);
         }
     }
 
-    @OnClick(R.id.stylize_button)
-    public void onClickStylizeButton() {
-        Observable.just(imageBitmap)
-                .subscribeOn(Schedulers.computation())
-                .observeOn(AndroidSchedulers.mainThread())
-                .subscribe(applyStyleObserver);
-    }
+/*    private Bitmap drawSquares(Bitmap imageBitmap) {
+        Mat imageMat = new Mat();
+        Utils.bitmapToMat(imageBitmap, imageMat);
 
-    private void cropBitmap() {
-        logger.startTimeLogging("Cropping image to 720 x 720");
-        int originalWidth = imageBitmap.getWidth();
-        int originalHeight = imageBitmap.getHeight();
+        int originalWidth = imageMat.width();
+        int originalHeight = imageMat.height();
 
         float aspectRatio = (float) originalWidth / originalHeight;
         int heightWithAspectRatio = (int) (targetWidth / aspectRatio);
 
-        logger.d("Target Width : %d Target Height : %d Aspect ratio %f", targetWidth, heightWithAspectRatio, aspectRatio);
+        Imgproc.resize(imageMat, imageMat, new Size(targetWidth, heightWithAspectRatio));
 
-        // Scale bitmap maintaining the aspect ratio
-        Bitmap rescaledBitmap = Bitmap.createScaledBitmap(imageBitmap, targetWidth, heightWithAspectRatio, false);
+        logger.i("Resulting mat object dimens : w : %d, h : %d, w/h : %f", imageMat.cols(), imageMat.rows(), aspectRatio);
 
-        Mat mat = new Mat();
-        Utils.bitmapToMat(rescaledBitmap, mat);
+        Imgproc.rectangle(imageMat, new Point(0, 0), new Point(targetWidth, targetHeight), new Scalar(0, 0, 255));
+        Imgproc.rectangle(imageMat, new Point(0, (heightWithAspectRatio - targetHeight)), new Point(targetWidth, heightWithAspectRatio), new Scalar(0, 255, 255));
 
-        logger.d("Mat rows : %d cols : %d", mat.rows(), mat.cols());
+        Bitmap resultBitmap = Bitmap.createBitmap(targetWidth, heightWithAspectRatio, Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(imageMat, resultBitmap);
 
-        int y = 0;
-        if (heightWithAspectRatio > targetHeight) {
-            int diff = heightWithAspectRatio - targetHeight;
-            y = diff/2;
-        }
+        return resultBitmap;
+    }*/
 
-        logger.d("Diff b/w targetHeight and aspect ratio height : %d", y);
 
-        Bitmap targetBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
-        Mat targetMat = mat.submat(y, y + targetHeight, 0, targetWidth);
+    @OnClick(R.id.stylize_button)
+    public void onClickStylizeButton() {
+        Observable.fromArray(imageInfoArrayList)
+                .map(new Function<ArrayList<ImageInfo>, ArrayList<Bitmap>>() {
+                    @Override
+                    public ArrayList<Bitmap> apply(@NonNull ArrayList<ImageInfo> imageInfos) throws Exception {
+                        ArrayList<Bitmap> styles = new ArrayList<Bitmap>();
+                        for (ImageInfo imageInfo : imageInfos) {
+                            Bitmap bitmap = applyStyle(imageInfo.getRgbValues(), imageInfo.getRgbPacked());
+                            styles.add(bitmap);
+                        }
 
-        Utils.matToBitmap(targetMat, targetBitmap);
+                        return styles;
+                    }
+                })
+                .subscribeOn(Schedulers.computation())
+                .observeOn(AndroidSchedulers.mainThread())
+                .subscribe(new Observer<ArrayList<Bitmap>>() {
+                    @Override
+                    public void onSubscribe(@NonNull Disposable d) {
 
-        logger.logTimeTaken();
+                    }
 
-        imageBitmap = targetBitmap;
+                    @Override
+                    public void onNext(@NonNull ArrayList<Bitmap> bitmaps) {
+                        Bitmap resultBitmap = imageUtils.stitchImages(bitmaps);
+                        imagePreview.setImageBitmap(resultBitmap);
+                    }
+
+                    @Override
+                    public void onError(@NonNull Throwable e) {
+
+                    }
+
+                    @Override
+                    public void onComplete() {
+
+                    }
+                });
     }
 
-    private void applyStyle(Bitmap imageBitmap) {
+    private Bitmap applyStyle(float[] rgbValues, int[] rgbPackedValues) {
         setStyle();
 
         // Copy the input data into TensorFlow.
@@ -199,7 +200,8 @@ public class StylizeActivity extends AppCompatActivity {
 
         Bitmap stylizedBitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888);
         stylizedBitmap.setPixels(rgbPackedFromTF, 0, stylizedBitmap.getWidth(), 0, 0, stylizedBitmap.getWidth(), stylizedBitmap.getHeight());
-        imagePreview.setImageBitmap(stylizedBitmap);
+
+        return stylizedBitmap;
     }
 
     private void setStyle() {
@@ -217,4 +219,6 @@ public class StylizeActivity extends AppCompatActivity {
     private void initTensorFlow() {
         inferenceInterface = new TensorFlowInferenceInterface(getAssets(), MODEL_FILE);
     }
+
+
 }
