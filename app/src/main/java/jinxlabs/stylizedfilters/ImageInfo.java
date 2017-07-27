@@ -4,6 +4,9 @@ import android.graphics.Bitmap;
 
 /**
  * Created by uditmukherjee on 20/07/17.
+ *
+ * Fetch the packed RGB values from Bitmap.getPixels() and extract the
+ * RGB values for tensorflow input branch
  */
 
 public class ImageInfo {
