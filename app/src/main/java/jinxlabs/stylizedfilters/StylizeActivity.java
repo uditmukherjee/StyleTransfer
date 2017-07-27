@@ -74,8 +74,8 @@ public class StylizeActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_stylize);
 
-        //String filePath = getIntent().getExtras().getString("IMAGE_FILE_URL");
-        String filePath = "/sdcard/Download/test3.jpg";
+        String filePath = getIntent().getExtras().getString("IMAGE_FILE_URL");
+        //String filePath = "/sdcard/Download/test3.jpg";
 
         logger.d("Image file path %s", filePath);
 
@@ -129,6 +129,31 @@ public class StylizeActivity extends AppCompatActivity {
 
     @OnClick(R.id.stylize_button)
     public void onClickStylizeButton() {
+        for (int i = 0; i < NUM_STYLES; i++) {
+            styleVals[i] = 0;
+        }
+
+        styleVals[0] = 0.5f;
+        styleVals[10] = 0.3f;
+        styleVals[11] = 0.2f;
+
+        applyFilterAndStitch();
+    }
+
+    @OnClick(R.id.stylize_starry_night)
+    public void onClickStarryButton() {
+        for (int i = 0; i < NUM_STYLES; i++) {
+            styleVals[i] = 0;
+        }
+
+        styleVals[10] = 0.5f;
+        styleVals[14] = 0.2f;
+        styleVals[20] = 0.3f;
+
+        applyFilterAndStitch();
+    }
+
+    private void applyFilterAndStitch() {
         Observable.fromArray(imageInfoArrayList)
                 .map(new Function<ArrayList<ImageInfo>, ArrayList<Bitmap>>() {
                     @Override
@@ -169,8 +194,6 @@ public class StylizeActivity extends AppCompatActivity {
     }
 
     private Bitmap applyStyle(float[] rgbValues, int[] rgbPackedValues) {
-        setStyle();
-
         // Copy the input data into TensorFlow.
         logger.startTimeLogging("Feeding data to tensorflow");
         inferenceInterface.feed(INPUT_NODE, rgbValues, 1, targetWidth, targetHeight, 3);
@@ -204,21 +227,8 @@ public class StylizeActivity extends AppCompatActivity {
         return stylizedBitmap;
     }
 
-    private void setStyle() {
-        for (int i = 0; i < NUM_STYLES; i++) {
-            styleVals[i] = 0;
-        }
-
-        //styleVals[0] = 1.0f;
-
-        styleVals[0] = 0.5f;
-        styleVals[10] = 0.3f;
-        styleVals[11] = 0.2f;
-    }
-
     private void initTensorFlow() {
         inferenceInterface = new TensorFlowInferenceInterface(getAssets(), MODEL_FILE);
     }
-
 
 }
