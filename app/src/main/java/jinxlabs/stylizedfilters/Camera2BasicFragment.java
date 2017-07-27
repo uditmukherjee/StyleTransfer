@@ -260,24 +260,26 @@ public class Camera2BasicFragment extends Fragment
 
                         @Override
                         public void onNext(@io.reactivex.annotations.NonNull Image image) {
-                            ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-                            byte[] bytes = new byte[buffer.remaining()];
-                            buffer.get(bytes);
-                            FileOutputStream output = null;
-                            try {
-                                output = new FileOutputStream(imageFile);
-                                output.write(bytes);
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            } finally {
-                                image.close();
-                                if (null != output) {
-                                    try {
-                                        output.close();
-                                    } catch (IOException e) {
-                                        e.printStackTrace();
-                                    }
+                            if(image != null) {
+                                ByteBuffer buffer = image.getPlanes()[0].getBuffer();
+                                byte[] bytes = new byte[buffer.remaining()];
+                                buffer.get(bytes);
+                                FileOutputStream output = null;
+                                try {
+                                    output = new FileOutputStream(imageFile);
+                                    output.write(bytes);
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                } finally {
+                                    image.close();
+                                    if (null != output) {
+                                        try {
+                                            output.close();
+                                        } catch (IOException e) {
+                                            e.printStackTrace();
+                                        }
 
+                                    }
                                 }
                             }
 
