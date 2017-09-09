@@ -85,22 +85,23 @@ public class StylizeActivity extends AppCompatActivity {
 
         // Show original image
         imageBitmap = imageUtils.fetchBitmapFromFile(filePath);
-        logger.d("Original image width : %d height : %d", imageBitmap.getWidth(), imageBitmap.getHeight());
-
-        squareParts = imageUtils.splitImageIntoSquares(imageBitmap, targetWidth, targetHeight);
-        fetchPixelValues(squareParts);
         imagePreview.setImageBitmap(imageBitmap);
+        logger.d("Original image width : %d height : %d", imageBitmap.getWidth(), imageBitmap.getHeight());
 
         initTensorFlow();
     }
 
-    private void fetchPixelValues(ArrayList<Bitmap> squareParts) {
+    private void fetchPixelValues(Bitmap imageBitmap) {
+        logger.startTimeLogging("Flattening pixels");
+        squareParts = imageUtils.splitImageIntoSquares(imageBitmap, targetWidth, targetHeight);
         for (Bitmap bitmap : squareParts) {
             ImageInfo imageInfo = new ImageInfo(targetWidth, targetHeight);
             imageInfo.readPixelValues(bitmap);
 
             imageInfoArrayList.add(imageInfo);
         }
+
+        logger.logTimeTaken();
     }
 
 /*    private Bitmap drawSquares(Bitmap imageBitmap) {
@@ -228,6 +229,7 @@ public class StylizeActivity extends AppCompatActivity {
     }
 
     private void initTensorFlow() {
+        fetchPixelValues(imageBitmap);
         inferenceInterface = new TensorFlowInferenceInterface(getAssets(), MODEL_FILE);
     }
 
